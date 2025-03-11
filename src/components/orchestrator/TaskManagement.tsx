@@ -96,10 +96,11 @@ const TaskManagement = ({
   const [activeTab, setActiveTab] = useState<"details" | "board">("board");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
 
   // Handle viewing a task's details
   const handleViewTask = (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
+    const task = localTasks.find((t) => t.id === taskId);
     if (task) {
       setSelectedTask(task);
       setActiveTab("details");
@@ -108,8 +109,27 @@ const TaskManagement = ({
 
   // Handle status change
   const handleStatusChange = (taskId: string, newStatus: Task["status"]) => {
+    // Update local state
+    setLocalTasks((prevTasks) =>
+      prevTasks.map((task) => {
+        if (task.id === taskId) {
+          const updatedTask = { ...task, status: newStatus };
+
+          // Update progress based on status
+          if (newStatus === "completed") {
+            updatedTask.progress = 100;
+          } else if (newStatus === "in-progress" && task.status === "pending") {
+            updatedTask.progress = 10;
+          }
+
+          return updatedTask;
+        }
+        return task;
+      }),
+    );
+
+    // Call the parent's callback
     onUpdateTaskStatus(taskId, newStatus);
-    // In a real app, we would update the task in state here
   };
 
   // Handle task creation
@@ -119,10 +139,34 @@ const TaskManagement = ({
       "id" | "status" | "progress" | "createdAt" | "errorLog"
     >,
   ) => {
-    // In a real app, we would add the task to state here
-    console.log("Creating task:", taskData);
-    // Then call the parent's onCreateTask callback
+    // Create a new task with generated ID and default values
+    const newTask: Task = {
+      id: `task-${localTasks.length + 1}`,
+      status: "pending",
+      progress: 0,
+      createdAt: new Date().toISOString(),
+      ...taskData,
+    };
+
+    // Update local state
+    setLocalTasks((prevTasks) => [...prevTasks, newTask]);
+
+    // Call the parent's callback
     onCreateTask();
+
+    // Close the modal
+    setIsCreateTaskOpen(false);
+  };
+
+  // Handle task deletion
+  const handleDeleteTask = (taskId: string) => {
+    // Update local state
+    setLocalTasks((prevTasks) =>
+      prevTasks.filter((task) => task.id !== taskId),
+    );
+
+    // Call the parent's callback
+    onDeleteTask(taskId);
   };
 
   return (
@@ -130,11 +174,11 @@ const TaskManagement = ({
       {activeTab === "board" ? (
         <>
           <TaskBoard
-            tasks={tasks}
+            tasks={localTasks}
             onCreateTask={() => setIsCreateTaskOpen(true)}
             onViewTask={handleViewTask}
             onEditTask={onEditTask}
-            onDeleteTask={onDeleteTask}
+            onDeleteTask={handleDeleteTask}
             onStatusChange={handleStatusChange}
           />
 
@@ -142,7 +186,7 @@ const TaskManagement = ({
             open={isCreateTaskOpen}
             onOpenChange={setIsCreateTaskOpen}
             onSubmit={handleCreateTask}
-            existingTasks={tasks}
+            existingTasks={localTasks}
           />
         </>
       ) : (
@@ -151,7 +195,7 @@ const TaskManagement = ({
             open={true}
             onOpenChange={() => setActiveTab("board")}
             task={selectedTask}
-            allTasks={tasks}
+            allTasks={localTasks}
             onEdit={onEditTask}
             onStatusChange={handleStatusChange}
           />
